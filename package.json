@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm test",
-    "verify:live": "node --env-file=.env.local scripts/verify-live.mjs"
+    "verify:live": "node --env-file=.env.local scripts/verify-live.mjs",
+    "test:browser": "node scripts/browser-check.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",
@@ -22,6 +23,8 @@
     "zod": "4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@sparticuz/chromium": "^153.0.0",
     "@types/node": "^22.19.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -29,6 +32,6 @@
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=22"
+    "node": "24.x"
   }
 }

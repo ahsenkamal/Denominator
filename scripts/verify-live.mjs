@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+const base = process.env.APP_URL || 'http://localhost:3000';
+const day = offset => new Date(Date.now() - offset * 86400000).toISOString().slice(0,10);
+const input = {poolId:'0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640',claim:`This pool's USD volume increased by 50% on ${day(1)} compared with ${day(2)}.`};
+const headers = {'Content-Type':'application/json',...(process.env.DEMO_ACCESS_CODE?{'x-demo-access-code':process.env.DEMO_ACCESS_CODE}:{})};
+async function post(path, body) {
+ const response=await fetch(base+path,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(65000)});
+ const data=await response.json();
+ assert.equal(response.ok,true,JSON.stringify(data));
+ return data;
+}
+const interpretation=await post('/api/interpret',input);
+assert.equal(interpretation.status,'ready');
+assert.equal(interpretation.plan.metric,'volumeUSD');
+assert.equal(interpretation.plan.comparison,'percentage_change');
+assert.equal(interpretation.plan.value,'50');
+assert.equal(interpretation.plan.targetDate,day(1));
+assert.equal(interpretation.plan.baselineDate,day(2));
+console.log('PASS: live Gemini interpretation preserves metric, percentage and UTC dates.');
+const receipt=await post('/api/verify',{...input,plan:interpretation.plan});
+assert.equal(receipt.snapshot.provenance.provider,'The Graph');
+assert.ok(receipt.snapshot.provenance.block.number>0);
+assert.ok(receipt.snapshot.observations.length>=2);
+assert.ok(['supported','contradicted'].includes(receipt.evaluation.verdict));
+const {id,...payload}=receipt;
+assert.equal(id,createHash('sha256').update(JSON.stringify(payload)).digest('hex'));
+await writeFile('/tmp/denominator-live-receipt.json',JSON.stringify(receipt,null,2));
+console.log(JSON.stringify({result:'PASS: live Graph evidence and receipt integrity',verdict:receipt.evaluation.verdict,baseline:receipt.evaluation.baseline,current:receipt.evaluation.current,percentChange:receipt.evaluation.percentChange,block:receipt.snapshot.provenance.block.number,receiptId:receipt.id}));
