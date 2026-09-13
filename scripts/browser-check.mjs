@@ -7,7 +7,7 @@ await inflate(join(process.cwd(),'node_modules/@sparticuz/chromium/bin/fonts.tar
 const browser=await chromium.launch({headless:true,args:portableChromium.args.filter(a=>!a.includes('disable-web-security')&&!a.includes('allow-running-insecure-content')),executablePath:await portableChromium.executablePath(),env:{...process.env,FONTCONFIG_PATH:join(tmpdir(),'fonts'),LD_LIBRARY_PATH:join(tmpdir(),'al2023/lib')}});
 const page=await browser.newPage({viewport:{width:1440,height:1100},deviceScaleFactor:1});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
-await page.goto('http://localhost:3000',{waitUntil:'networkidle'});
+await page.goto(process.env.APP_URL || 'http://localhost:3000',{waitUntil:'networkidle'});
 await page.screenshot({path:'/tmp/denominator-desktop.png',fullPage:true});
 await page.getByRole('button',{name:'Methodology',exact:true}).click();
 await page.getByRole('heading',{name:'Show your work. All of it.'}).waitFor();
