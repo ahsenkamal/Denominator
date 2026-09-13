@@ -10,6 +10,8 @@ Built from scratch for **ETHOnline 2026 — The Graph: Best AI Tooling or AI Use
 
 Choose ETH / USDC · 0.05% and select **The big percentage**. Click **Interpret claim**, review the dates and comparison, then **Confirm & check evidence**. Open **Inspect the evidence** and download the receipt. Example cards are unverified claims, not preset results.
 
+**Live app: [denominator-three.vercel.app](https://denominator-three.vercel.app)**
+
 See [the demo and submission guide](docs/DEMO.md).
 
 ## Run locally
@@ -23,14 +25,14 @@ cp .env.example .env.local
 npm run dev
 ```
 
-| Variable | Purpose |
-| --- | --- |
-| `GRAPH_API_KEY` | The Graph query API key, server only |
+| Variable            | Purpose                                                      |
+| ------------------- | ------------------------------------------------------------ |
+| `GRAPH_API_KEY`     | The Graph query API key, server only                         |
 | `GRAPH_SUBGRAPH_ID` | Ethereum Uniswap v3 subgraph; a verified default is included |
-| `LLM_API_KEY` | Google Gemini API key, server only |
-| `LLM_PROVIDER` | `gemini` |
-| `LLM_MODEL` | `gemini-3.6-flash`, verified with the development account |
-| `DEMO_ACCESS_CODE` | Optional shared code to restrict public inference requests |
+| `LLM_API_KEY`       | Google Gemini API key, server only                           |
+| `LLM_PROVIDER`      | `gemini`                                                     |
+| `LLM_MODEL`         | `gemini-3.6-flash`, verified with the development account    |
+| `DEMO_ACCESS_CODE`  | Optional shared code to restrict public inference requests   |
 
 Keys and `.vercel` credentials are ignored by Git. Never prefix secrets with `NEXT_PUBLIC_`. Model availability and free-tier quota depend on the Google account.
 
@@ -69,7 +71,8 @@ No shared claim database is used. Claim text is sent to Gemini; pool and date qu
 npm run check       # TypeScript + 19 arithmetic, date and Graph snapshot tests
 npm run build       # Production build; no keys required at build time
 npm run verify:live # Real Gemini + Graph call; requires .env.local and running app
-npm run test:browser
+npm run test:browser # Navigation and responsive layout
+# LIVE_BROWSER=1 npm run test:browser also exercises live APIs + receipt download
 ```
 
 The browser script uses a portable Chromium bundle for this Linux workspace. It checks desktop/mobile layout and navigation, writes screenshots to `/tmp`, and can target a deployed app using `APP_URL`.
