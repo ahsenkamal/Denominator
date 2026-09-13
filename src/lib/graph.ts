@@ -5,9 +5,12 @@ import { getPool } from "./pools";
 import { DAY, dateTimestamp, type ClaimPlan, type GraphSnapshot } from "./types";
 
 const nonnegative = z.string().regex(/^\d+(\.\d+)?$/);
-const metaSchema = z.object({ deployment: z.string(), hasIndexingErrors: z.boolean(), block: z.object({ number: z.number().int().nonnegative(), hash: z.string().nullable(), timestamp: z.number().int().positive() }) });
+const metaSchema = z.object({ deployment: z.string(), hasIndexingErrors: z.boolean(), block: z.object({ number: z.number().int().nonnegative(), hash: z.string().regex(/^0x[a-fA-F0-9]{64}$/), timestamp: z.number().int().positive() }) });
+// Graph Node can omit hash/timestamp in _meta for historical block queries.
+// The preflight header supplies them; data is explicitly pinned to that header's hash.
+const historicalMetaSchema = metaSchema.extend({ block: z.object({ number: z.number().int().nonnegative(), hash: z.string().nullable(), timestamp: z.number().int().positive().nullable() }) });
 const dataSchema = z.object({
-  _meta: metaSchema,
+  _meta: historicalMetaSchema,
   pool: z.object({ id: z.string(), feeTier: z.string(), token0: z.object({ id: z.string(), symbol: z.string() }), token1: z.object({ id: z.string(), symbol: z.string() }) }).nullable(),
   poolDayDatas: z.array(z.object({ date: z.number().int(), volumeUSD: nonnegative, txCount: z.string().regex(/^\d+$/) })),
 });
@@ -42,29 +45,30 @@ export async function fetchSnapshot(poolId: string, plan: ClaimPlan): Promise<Gr
   const earliest = Math.min(latest - 6 * DAY, plan.baselineDate ? dateTimestamp(plan.baselineDate) : latest);
   // Only a whitelisted address enters the query. All time and block values are variables.
   // Pin all observations to the same block, preserving reproducibility within archive retention.
-  const query = `query Evidence($start: Int!, $end: Int!, $block: Int!) {
-    pool(id: "${pool.id}", block: {number: $block}) { id feeTier token0 { id symbol } token1 { id symbol } }
+  const blockSelector = `{hash: "${meta.data.block.hash}"}`;
+  const query = `query Evidence($start: Int!, $end: Int!) {
+    pool(id: "${pool.id}", block: ${blockSelector}) { id feeTier token0 { id symbol } token1 { id symbol } }
     poolDayDatas(first: 100, orderBy: date, orderDirection: asc,
-      where: {pool: "${pool.id}", date_gte: $start, date_lt: $end}, block: {number: $block}) {
+      where: {pool: "${pool.id}", date_gte: $start, date_lt: $end}, block: ${blockSelector}) {
       date volumeUSD txCount
     }
-    _meta(block: {number: $block}) { deployment hasIndexingErrors block { number hash timestamp } }
+    _meta(block: ${blockSelector}) { deployment hasIndexingErrors block { number hash timestamp } }
   }`;
-  const variables = { start: earliest, end: latest + DAY, block: meta.data.block.number };
+  const variables = { start: earliest, end: latest + DAY };
   const parsed = dataSchema.safeParse(await request(query, variables, subgraphId, key));
   if (!parsed.success) throw new AppError("GRAPH_SCHEMA", "The source response does not match the supported Uniswap v3 daily-data schema.", 502);
   const data = parsed.data;
   if (!data.pool || data.pool.id.toLowerCase() !== pool.id || data.pool.feeTier !== pool.feeTier || data.pool.token0.symbol !== pool.symbols[0] || data.pool.token1.symbol !== pool.symbols[1]) {
     throw new AppError("POOL_MISMATCH", "The source did not resolve the expected pool, token pair, and fee tier.", 502);
   }
-  if (data._meta.deployment !== meta.data.deployment || data._meta.block.number !== variables.block || data._meta.block.hash !== meta.data.block.hash) {
+  if (data._meta.deployment !== meta.data.deployment || data._meta.block.number !== meta.data.block.number || (data._meta.block.hash !== null && data._meta.block.hash !== meta.data.block.hash) || (data._meta.block.timestamp !== null && data._meta.block.timestamp !== meta.data.block.timestamp)) {
     throw new AppError("SOURCE_CHANGED", "The source changed while gathering evidence. Please retry for a consistent snapshot.", 502);
   }
   return {
     pool: data.pool, observations: data.poolDayDatas,
     provenance: { provider: "The Graph", chain: "Ethereum mainnet", subgraphId, deployment: data._meta.deployment,
-      block: data._meta.block, hasIndexingErrors: data._meta.hasIndexingErrors,
-      retrievedAt: new Date().toISOString(), indexingLagSeconds: Math.max(0, Math.floor(Date.now() / 1000) - data._meta.block.timestamp),
+      block: meta.data.block, hasIndexingErrors: data._meta.hasIndexingErrors,
+      retrievedAt: new Date().toISOString(), indexingLagSeconds: Math.max(0, Math.floor(Date.now() / 1000) - meta.data.block.timestamp),
       query, variables, explorerUrl: `https://thegraph.com/explorer/subgraphs/${subgraphId}?view=Query&chain=arbitrum-one`,
     },
   };
